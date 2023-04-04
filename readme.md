@@ -19,7 +19,7 @@
  2. 进阶用法
  - [1.定义数据接口](advanced_skills/1.lightningdatamodule.md)
  - [2.命令行工具CLI](advanced_skills/2.cli.md)
- - [3.回调Callback](advanced_skills/3.modelcheckpoint.md)
+ - [3.检查点回调Callback](advanced_skills/3.modelcheckpoint.md)
  - [4.加载多个数据集](advanced_skills/4.combined_loader.md)
 
 
