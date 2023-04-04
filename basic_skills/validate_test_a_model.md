@@ -1,0 +1,82 @@
+# 验证集和测试集中评估模型
+
+通常将数据集分为三部分，train/val/test，val集在训练时评估模型的活化性，选择其中表现最好的checkpoint。test集只在模型训练完成后使用，用于评估模型的真实性能。
+
+## 添加test流程
+
+### 划分数据集
+
+以下代码使用torchvision包内实现的MNIST，自定义的数据集先用pytorch实现Dataset子类，再继承[pl.LightningDataModule](https://lightning.ai/docs/pytorch/latest/data/datamodule.html)类，实现相应接口。
+
+```python
+import torch.utils.data as data
+from torchvision import datasets
+import torchvision.transforms as transforms
+
+# Load data sets
+transform = transforms.ToTensor()
+train_set = datasets.MNIST(root="MNIST", download=True, train=True, transform=transform)
+test_set = datasets.MNIST(root="MNIST", download=True, train=False, transform=transform)
+```
+
+### 实现test_step()接口
+在trainer.test()阶段会自动调用test_step方法，根据需要内部可以增加保存图片、评估模型等功能。
+```python
+class LitAutoEncoder(pl.LightningModule):
+    def training_step(self, batch, batch_idx):
+        ...
+
+    def test_step(self, batch, batch_idx):
+        # this is the test loop
+        x, y = batch
+        x = x.view(x.size(0), -1)
+        z = self.encoder(x)
+        x_hat = self.decoder(z)
+        test_loss = F.mse_loss(x_hat, x)
+        self.log("test_loss", test_loss)
+```
+
+### 测试
+
+模型训练完成后，即可调用test()方法进入测试流程
+```python
+from torch.utils.data import DataLoader
+
+# initialize the Trainer
+trainer = Trainer()
+
+# 训练模型
+trainer.fit(model, data)
+
+# 训练完成后测试
+trainer.test(model, dataloaders=DataLoader(test_set))
+```
+
+## 验证阶段的流程
+
+与test 流程类似，实现validation_step()接口，可以配合on_validation_epoch_end()方法在计算所有样例后评估模型。
+
+```python
+class LitAutoEncoder(pl.LightningModule):
+    def training_step(self, batch, batch_idx):
+        ...
+
+    def validation_step(self, batch, batch_idx):
+        # this is the validation loop
+        x, y = batch
+        x = x.view(x.size(0), -1)
+        z = self.encoder(x)
+        x_hat = self.decoder(z)
+        val_loss = F.mse_loss(x_hat, x)
+        self.log("val_loss", val_loss)
+        self.metric.update(x_hat, y)# metric是任务相关的评价方法，比如更新混淆矩阵
+    
+    def on_validation_epoch_step(self, batch, batch_idx):
+        
+        # 从混淆矩阵中计算tp,fp, tn, fn, acc, F1等指标 
+        score = self.metric.get_scores()
+        # 记录，横坐标为epoch
+        self.log('val/F1', score['F1'], logger=True, on_epoch=True)
+```
+
+其它HOOk见[LightningModule](https://lightning.ai/docs/pytorch/latest/common/lightning_module.html)，了解LightningModule的接口基本就会用pl了。
